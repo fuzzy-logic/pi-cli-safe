@@ -34,7 +34,7 @@ export const DEFAULTS: Config = {
 	layaSocket: join(runtimeDir, "pi-cli-safe-laya.sock"),
 	layaTimeoutMs: 400,
 	llmEndpoint: "http://127.0.0.1:8127/v1/chat/completions",
-	llmModel: "qwen3.5-2b",
+	llmModel: "reviewer",
 	llmTimeoutMs: 4000,
 	nonInteractive: "block",
 	logFile: join(stateDir, "decisions.jsonl"),
