@@ -224,8 +224,20 @@ Laya's weights are frozen and nothing here retrains them. What happens instead:
 1. **Exemplars, immediate.** Every command you or the reviewer calls dangerous
    is stored and embedded using the encoder that is *already loaded*
    (`laya.embed_fn_from_agent` — no second model, no extra memory). New commands
-   are compared by cosine similarity, so something merely *similar* to what you
-   flagged inherits the caution on the very next call.
+   are compared against them and something merely *similar* to what you flagged
+   inherits the caution on the very next call. Three details make that safe to
+   rely on, each measured rather than assumed:
+   - **Centred, not raw, cosine.** Mean-pooled embeddings of shell commands are
+     anisotropic: unrelated commands sit at a median cosine of 0.85, and `df -h`
+     scored 0.95 against an exfiltration exemplar. Subtracting the seed-corpus
+     mean pulls unrelated pairs to ~0 while paraphrases stay at 0.5–0.8.
+   - **Same head required.** The new command must start with the same program
+     (`rm`, `git push`, …) as the exemplar. The encoder cannot tell `| sh` from
+     `| jq`, but it never needs to compare `tar` with `mv` either.
+   - **Graded raise.** A close match (≥ 0.75) inherits *danger*; a looser one
+     (≥ 0.55) is only raised to *review*, so the LLM layer gets a look before
+     anyone is interrupted. Against a realistic eight-exemplar store this cut
+     false hits on the 111 safe seed commands from 35 to 3.
 2. **Recalibration, periodic.** Accumulated labels re-fit the layer-1
    thresholds via `daemon/calibrate.py`.
 3. **Fine-tuning, manual.** Laya ships a fine-tuning notebook. `/safe export`

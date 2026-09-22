@@ -19,6 +19,7 @@ Protocol: newline-delimited JSON, one request per connection.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import os
 import socket
@@ -26,6 +27,8 @@ import socketserver
 import sys
 import threading
 import time
+
+import numpy as np
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -33,7 +36,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import policy  # noqa: E402
 import syntax as syn  # noqa: E402
 from questions import QUESTIONS  # noqa: E402
-from store import DEFAULT_THRESHOLD, ExemplarStore  # noqa: E402
+from store import DANGER_THRESHOLD, DEFAULT_THRESHOLD, ExemplarStore  # noqa: E402
 
 STATE = Path(
     os.environ.get("XDG_STATE_HOME", Path.home() / ".local" / "state")
@@ -43,6 +46,24 @@ DEFAULT_SOCKET = Path(
 ) / "pi-cli-safe-laya.sock"
 
 
+def corpus_centre(embed) -> "np.ndarray | None":
+    """Mean embedding of the seed corpus, used to centre the exemplar space.
+
+    Costs ~4 s at start-up (181 short strings) and buys a usable similarity
+    metric; see the thresholds note in store.py. Returns None when the corpus
+    is not shipped alongside the daemon, in which case raw cosine is used.
+    """
+    seed = Path(__file__).resolve().parent.parent / "data" / "seed_commands.py"
+    if not seed.exists():
+        return None
+    spec = importlib.util.spec_from_file_location("pi_cli_safe_seed", seed)
+    mod = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(mod)
+    cmds = [r[0] for r in mod.SAFE] + [r[0] for r in mod.DANGEROUS]
+    return np.asarray(embed(cmds), dtype=np.float64).mean(axis=0)
+
+
 class Engine:
     def __init__(self, device: str | None, threshold: float):
         import laya
@@ -50,11 +71,13 @@ class Engine:
         t0 = time.perf_counter()
         self.agent = laya.load("convaiinnovations/laya", device=device)
         self.embed = laya.embed_fn_from_agent(self.agent)
-        self.store = ExemplarStore(STATE / "exemplars.jsonl", self.embed)
+        centre = corpus_centre(self.embed)
+        self.store = ExemplarStore(STATE / "exemplars.jsonl", self.embed, centre)
         self.threshold = threshold
         self.lock = threading.Lock()
         print(
             f"laya ready in {time.perf_counter() - t0:.1f}s on {self.agent.device}; "
+            f"centre: {'seed corpus' if centre is not None else 'none (raw cosine)'}; "
             f"store: {self.store.stats()}",
             flush=True,
         )
@@ -75,13 +98,21 @@ class Engine:
         hit = self.store.nearest(command, self.threshold)
         if hit:
             sim, ex = hit
-            raised = policy.escalate(tier, "danger")
+            # Graded: a near-copy inherits "danger"; a looser match only earns a
+            # "review", so the LLM layer gets a look before anyone is interrupted.
+            target = "danger" if sim >= DANGER_THRESHOLD else "review"
+            raised = policy.escalate(tier, target)
             if raised != tier:
                 tier = raised
-                reason = "Similar to a command previously ruled dangerous."
+                reason = (
+                    "Similar to a command previously ruled dangerous."
+                    if target == "danger"
+                    else "Resembles a command previously ruled dangerous; worth a second look."
+                )
             learned = {
                 "similarity": round(sim, 4),
                 "exemplar": ex.command,
+                "band": target,
                 "raisedTo": tier,
             }
 
