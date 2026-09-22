@@ -12,9 +12,9 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { runCascade } from "./cascade.js";
 import { loadConfig } from "./config.js";
 import * as l1 from "./layers/l1-laya.js";
-import * as l2 from "./layers/l2-llm.js";
 import * as l3 from "./layers/l3-user.js";
 import { teach } from "./learn.js";
+import { ReviewerPool } from "./reviewer.js";
 import { makeDecision, record } from "./log.js";
 import type { Candidate } from "./types.js";
 
@@ -36,6 +36,9 @@ function toCandidate(toolName: string, input: Record<string, unknown>, cwd: stri
 }
 
 export default function (pi: ExtensionAPI) {
+	// One pool per session: discovery runs in the background and is reused.
+	let pool: ReviewerPool | null = null;
+
 	pi.on("tool_call", async (event, ctx) => {
 		const cwd = ctx.cwd ?? process.cwd();
 		const cfg = loadConfig(cwd);
@@ -44,10 +47,14 @@ export default function (pi: ExtensionAPI) {
 		const candidate = toCandidate(event.toolName, event.input as Record<string, unknown>, cwd);
 		if (!candidate) return undefined;
 
+		if (!pool) pool = new ReviewerPool(cfg);
+		const reviewers = pool;
+
 		const started = Date.now();
 		const outcome = await runCascade(candidate, cfg, {
 			score: (c) => l1.scoreCommand(cfg.layaSocket, c, cfg.layaTimeoutMs),
-			review: (c) => l2.reviewCommand(cfg.llmEndpoint, cfg.llmModel, c, cfg.llmTimeoutMs),
+			review: (c) => reviewers.review(c),
+			reviewerName: () => reviewers.chosen?.model ?? "local reviewer",
 		});
 
 		const finish = (allowed: boolean, reason: string) => {

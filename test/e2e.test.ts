@@ -9,19 +9,29 @@ import { describe, expect, it } from "vitest";
 import { runCascade } from "../src/cascade.js";
 import { loadConfig } from "../src/config.js";
 import * as l1 from "../src/layers/l1-laya.js";
-import * as l2 from "../src/layers/l2-llm.js";
+import { ReviewerPool } from "../src/reviewer.js";
 import type { Candidate } from "../src/types.js";
 
 const cfg = loadConfig(process.cwd());
 const live = existsSync(cfg.layaSocket);
 
+const pool = new ReviewerPool({ ...cfg, llmTimeoutMs: 20000 });
 const deps = {
 	score: (c: Candidate) => l1.scoreCommand(cfg.layaSocket, c, 5000),
-	review: (c: Candidate) => l2.reviewCommand(cfg.llmEndpoint, cfg.llmModel, c, 15000),
+	review: (c: Candidate) => pool.review(c),
+	reviewerName: () => pool.chosen?.model ?? "local reviewer",
 };
 const bash = (command: string): Candidate => ({ command, paths: [], cwd: "/home/u/project", toolName: "bash" });
 
 describe.skipIf(!live)("full stack, live services", () => {
+	// Discovery runs in the background on the first call; resolve it up front so
+	// the first case is not the one that pays for it.
+	it("discovers a reviewer", async () => {
+		const r = await pool.resolveNow();
+		if (r) console.log(`  reviewer: ${r.model} @ ${r.endpoint} (${r.runtime}, via ${r.source})`);
+		else console.log("  no reviewer available - cascade will run L0->L1->L3");
+	}, 60000);
+
 	const cases: [string, "allow" | "ask" | "block", string][] = [
 		["ls -la", "allow", "trivial"],
 		["npm test", "allow", "routine"],
