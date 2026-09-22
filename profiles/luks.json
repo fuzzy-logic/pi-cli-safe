@@ -1,0 +1,51 @@
+{
+  "name": "luks",
+  "description": "LUKS full-disk encryption. On an encrypted root these are unrecoverable: there is no undo and no backup of a destroyed header.",
+  "rules": [
+    {
+      "id": "luks.format",
+      "severity": "block",
+      "pattern": "\\bcryptsetup\\b[^|;&]*\\bluksFormat\\b",
+      "reason": "luksFormat writes a new LUKS header and permanently destroys access to all existing data on the device.",
+      "examples": [
+        "cryptsetup luksFormat /dev/nvme0n1p2"
+      ]
+    },
+    {
+      "id": "luks.erase",
+      "severity": "block",
+      "pattern": "\\bcryptsetup\\b[^|;&]*\\b(luksErase|erase)\\b",
+      "reason": "luksErase destroys all key slots. The data becomes permanently unrecoverable.",
+      "examples": [
+        "cryptsetup luksErase /dev/nvme0n1p2"
+      ]
+    },
+    {
+      "id": "luks.key-removal",
+      "severity": "block",
+      "pattern": "\\bcryptsetup\\b[^|;&]*\\b(luksRemoveKey|luksKillSlot)\\b",
+      "reason": "Removing the wrong key slot can leave the volume permanently unopenable.",
+      "examples": [
+        "cryptsetup luksKillSlot /dev/nvme0n1p2 0"
+      ]
+    },
+    {
+      "id": "luks.header-restore",
+      "severity": "block",
+      "pattern": "\\bcryptsetup\\b[^|;&]*\\bluksHeaderRestore\\b",
+      "reason": "Restoring a mismatched header makes the volume permanently unopenable.",
+      "examples": [
+        "cryptsetup luksHeaderRestore /dev/nvme0n1p2 --header-backup-file h.img"
+      ]
+    },
+    {
+      "id": "luks.crypttab-write",
+      "severity": "danger",
+      "pattern": "((>|>>)\\s*/etc/crypttab|\\b(rm|rmdir|unlink|truncate|tee|shred|install|chmod|chown|ln)\\b[^|;&]*\\s/etc/crypttab|\\b(cp|mv)\\b[^|;&]*\\s/etc/crypttab\\s*$|\\bsed\\b[^|;&]*\\s-i[^\\s]*\\s[^|;&]*/etc/crypttab)",
+      "reason": "A wrong crypttab entry stops the encrypted root unlocking at boot.",
+      "examples": [
+        "rm /etc/crypttab"
+      ]
+    }
+  ]
+}

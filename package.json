@@ -1,0 +1,49 @@
+{
+  "name": "pi-cli-safe",
+  "version": "0.1.0",
+  "description": "A fuzzy-logic safety cascade for the Pi coding agent: deterministic rules, a local decision model, a local LLM reviewer, then you.",
+  "keywords": [
+    "pi",
+    "pi-extension",
+    "coding-agent",
+    "safety",
+    "guardrails",
+    "shell",
+    "laya"
+  ],
+  "license": "MIT",
+  "author": "fuzzy-logic",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fuzzy-logic/pi-cli-safe.git"
+  },
+  "homepage": "https://github.com/fuzzy-logic/pi-cli-safe#readme",
+  "bugs": {
+    "url": "https://github.com/fuzzy-logic/pi-cli-safe/issues"
+  },
+  "type": "module",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./cascade": "./src/cascade.ts",
+    "./types": "./src/types.ts"
+  },
+  "files": [
+    "src",
+    "profiles",
+    "daemon",
+    "systemd",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "^0.87.0",
+    "@types/node": "^26.6.2",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0"
+  }
+}

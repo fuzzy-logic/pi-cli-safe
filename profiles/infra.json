@@ -1,0 +1,132 @@
+{
+  "name": "infra",
+  "description": "Network, process, container, cloud and database operations whose damage is remote or immediate rather than on disk. Enable when the agent can reach infrastructure.",
+  "rules": [
+    {
+      "id": "net.firewall-flush",
+      "severity": "danger",
+      "pattern": "\\b(iptables|ip6tables|nft)\\b[^|;&]*(\\s-F\\b|\\bflush\\b)",
+      "reason": "Flushing firewall rules exposes the machine until they are restored.",
+      "examples": [
+        "iptables -F"
+      ]
+    },
+    {
+      "id": "net.link-down",
+      "severity": "danger",
+      "pattern": "\\bip\\b[^|;&]*\\blink\\b[^|;&]*\\bset\\b[^|;&]*\\bdown\\b|\\bifconfig\\b[^|;&]*\\bdown\\b|\\bnmcli\\b[^|;&]*\\bnetworking\\s+off\\b",
+      "reason": "Taking the interface down disconnects the machine, including this session.",
+      "examples": [
+        "ip link set eth0 down"
+      ]
+    },
+    {
+      "id": "proc.killall-user",
+      "severity": "danger",
+      "pattern": "\\b(killall|pkill)\\b[^|;&]*(-9|-KILL)?[^|;&]*(-u\\s*\\$?USER|\\s-1\\b)",
+      "reason": "Kills every process for the user, ending the session.",
+      "examples": [
+        "killall -9 -u $USER"
+      ]
+    },
+    {
+      "id": "sys.power",
+      "severity": "danger",
+      "pattern": "\\b(reboot|poweroff|halt|shutdown)\\b|\\bsystemctl\\b[^|;&]*\\b(reboot|poweroff|halt|emergency|rescue)\\b",
+      "reason": "Reboots or powers off the machine, losing unsaved work.",
+      "examples": [
+        "sudo reboot",
+        "sudo systemctl poweroff"
+      ]
+    },
+    {
+      "id": "git.branch-force-delete",
+      "severity": "danger",
+      "pattern": "\\bgit\\b[^|;&]*\\bbranch\\b[^|;&]*\\s-D\\b|\\bgit\\b[^|;&]*\\bbranch\\b[^|;&]*--delete\\s+--force",
+      "reason": "Force-deletes a branch, including unmerged commits.",
+      "examples": [
+        "git branch -D feature/important"
+      ]
+    },
+    {
+      "id": "git.history-destroy",
+      "severity": "danger",
+      "pattern": "\\bgit\\b[^|;&]*\\breflog\\b[^|;&]*\\bexpire\\b|\\bgit\\b[^|;&]*\\bfilter-(branch|repo)\\b",
+      "reason": "Destroys the recovery history that would otherwise let you undo a mistake.",
+      "examples": [
+        "git reflog expire --expire=now --all && git gc --prune=now"
+      ]
+    },
+    {
+      "id": "k8s.delete",
+      "severity": "danger",
+      "pattern": "\\bkubectl\\b[^|;&]*\\bdelete\\b|\\bhelm\\b[^|;&]*\\b(uninstall|delete)\\b",
+      "reason": "Deletes live Kubernetes resources.",
+      "examples": [
+        "kubectl delete namespace production"
+      ]
+    },
+    {
+      "id": "cloud.destroy",
+      "severity": "danger",
+      "pattern": "\\bterraform\\b[^|;&]*\\bdestroy\\b|\\baws\\b[^|;&]*\\b(terminate-instances|delete-[a-z-]+|rm)\\b|\\bgcloud\\b[^|;&]*\\bdelete\\b|\\baz\\b[^|;&]*\\bdelete\\b",
+      "reason": "Destroys cloud infrastructure or remote data.",
+      "examples": [
+        "terraform destroy -auto-approve",
+        "aws ec2 terminate-instances --instance-ids i-0abc",
+        "aws s3 rm s3://prod-bucket --recursive"
+      ]
+    },
+    {
+      "id": "db.destructive",
+      "severity": "danger",
+      "pattern": "\\b(DROP\\s+(DATABASE|TABLE|SCHEMA)|TRUNCATE\\s+TABLE|DELETE\\s+FROM\\s+\\w+\\s*;)|\\bdropDatabase\\s*\\(|\\bFLUSHALL\\b|\\bFLUSHDB\\b",
+      "reason": "Destroys database contents.",
+      "examples": [
+        "psql -c 'DROP DATABASE production'",
+        "mysql -e 'TRUNCATE TABLE users'",
+        "redis-cli FLUSHALL",
+        "mongo --eval 'db.dropDatabase()'"
+      ]
+    },
+    {
+      "id": "docker.prune-all",
+      "severity": "danger",
+      "pattern": "\\bdocker\\b[^|;&]*\\b(system\\s+)?prune\\b[^|;&]*(--volumes|-a[a-z]*f|--all)|\\bdocker\\b[^|;&]*\\bvolume\\b[^|;&]*\\b(rm|prune)\\b",
+      "reason": "Destroys container volumes and any data inside them.",
+      "examples": [
+        "docker system prune -af --volumes"
+      ]
+    },
+    {
+      "id": "git.discard-work",
+      "severity": "danger",
+      "pattern": "\\bgit\\b[^|;&]*\\bclean\\b[^|;&]*-[a-zA-Z]*[fdx][a-zA-Z]*|\\bgit\\b[^|;&]*\\bpush\\b[^|;&]*(--force(?!-with-lease)|\\s-f\\b)|\\bgit\\b[^|;&]*\\breset\\b[^|;&]*--hard",
+      "reason": "Discards local work or rewrites shared history. Also covered by pi-prevent-destructive-commands when installed.",
+      "examples": [
+        "git clean -xfd",
+        "git push --force origin main",
+        "git reset --hard origin/main"
+      ]
+    },
+    {
+      "id": "fs.find-delete",
+      "severity": "danger",
+      "pattern": "\\bfind\\b[^|;&]*(-delete\\b|-exec\\s+(sudo\\s+)?rm\\b)",
+      "reason": "find with -delete or -exec rm removes every match, which is easy to get wrong.",
+      "examples": [
+        "find ~ -name '*.log' -delete",
+        "find . -name node_modules -exec rm -rf {} +"
+      ]
+    },
+    {
+      "id": "pkg.apt-purge",
+      "severity": "danger",
+      "pattern": "\\bapt(-get)?\\b[^|;&]*\\b(purge|autoremove)\\b|\\bdpkg\\b[^|;&]*\\s--(purge|remove)\\b|\\b(snap|brew)\\b[^|;&]*\\bremove\\b",
+      "reason": "Removing system packages can break the machine.",
+      "examples": [
+        "apt-get purge --auto-remove systemd"
+      ]
+    }
+  ]
+}

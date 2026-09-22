@@ -1,0 +1,22 @@
+[Unit]
+Description=pi-cli-safe layer 2 — local LLM reviewer
+Documentation=https://github.com/fuzzy-logic/pi-cli-safe
+
+[Service]
+Type=simple
+# Any OpenAI-compatible server works; llama.cpp is just the easy local option.
+# A small model is the right choice here: the judgement is narrow, and a small
+# model leaves your GPU free for the model you are actually coding with.
+Environment=LLAMA_SERVER=/usr/bin/llama-server
+Environment=LLAMA_MODEL=%h/.local/share/models/Qwen3.5-2B-Q4_K_M.gguf
+ExecStart=/bin/sh -c '"$LLAMA_SERVER" -m "$LLAMA_MODEL" --host 127.0.0.1 --port 8127 \
+  --ctx-size 4096 --n-gpu-layers 0 --threads 8 --alias qwen3.5-2b'
+Restart=always
+RestartSec=5
+Nice=10
+
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target

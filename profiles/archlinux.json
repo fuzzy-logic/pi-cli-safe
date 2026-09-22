@@ -1,0 +1,108 @@
+{
+  "name": "archlinux",
+  "description": "Arch Linux boot chain and package manager. Enable on machines where an unbootable system is worse than a lost file.",
+  "rules": [
+    {
+      "id": "arch.mkinitcpio",
+      "severity": "block",
+      "pattern": "\\bmkinitcpio\\b",
+      "reason": "Rebuilds the initramfs/UKI. A bad run leaves the machine unbootable, especially with an encrypted root.",
+      "examples": [
+        "sudo mkinitcpio -P"
+      ]
+    },
+    {
+      "id": "arch.sbctl-destructive",
+      "severity": "block",
+      "pattern": "\\bsbctl\\b[^|;&]*\\b(enroll-keys|reset|remove-file|create-keys)\\b",
+      "reason": "Secure Boot key changes can make the system refuse to boot.",
+      "examples": [
+        "sbctl enroll-keys --microsoft"
+      ]
+    },
+    {
+      "id": "arch.bootloader",
+      "severity": "block",
+      "pattern": "\\b(grub-install|grub-mkconfig)\\b|\\b(limine[a-z-]*|bootctl)\\b[^|;&]*(\\binstall\\b|\\bdeploy\\b|\\benroll-config\\b)|\\befibootmgr\\b[^|;&]*(--create|--delete|\\s-[bB]\\s)",
+      "reason": "Bootloader installation or EFI entry changes can make the machine unbootable.",
+      "examples": [
+        "sudo bootctl install",
+        "efibootmgr -b 0003 --delete",
+        "grub-install /dev/sda"
+      ]
+    },
+    {
+      "id": "arch.boot-partition-write",
+      "severity": "danger",
+      "pattern": "((>|>>)\\s*/boot(/[^\\s]*)?|\\b(rm|rmdir|unlink|truncate|tee|shred|install|chmod|chown|ln)\\b[^|;&]*\\s/boot(/[^\\s]*)?|\\b(cp|mv)\\b[^|;&]*\\s/boot(/[^\\s]*)?\\s*$|\\bsed\\b[^|;&]*\\s-i[^\\s]*\\s[^|;&]*/boot(/[^\\s]*)?)",
+      "reason": "Writing to /boot touches the kernel, initramfs or UKI.",
+      "examples": [
+        "rm /boot/initramfs-linux.img"
+      ]
+    },
+    {
+      "id": "arch.pacman-mass-remove",
+      "severity": "block",
+      "pattern": "\\bpacman\\b[^|;&]*-R[a-z]*\\b[^|;&]*\\$\\(.*pacman.*-Q",
+      "reason": "Removing every installed package destroys the system.",
+      "examples": [
+        "pacman -Rns $(pacman -Qq)"
+      ]
+    },
+    {
+      "id": "arch.pacman-destructive",
+      "severity": "danger",
+      "pattern": "\\bpacman\\b[^|;&]*\\s-(R[a-z]*d[a-z]*|Rns|Scc)\\b",
+      "reason": "Force-removing packages or clearing the package cache is hard to undo offline.",
+      "examples": [
+        "pacman -Rdd glibc",
+        "pacman -Scc"
+      ]
+    },
+    {
+      "id": "arch.sudoers-write",
+      "severity": "block",
+      "pattern": "((>|>>)\\s*/etc/sudoers[^\\s]*|\\b(rm|rmdir|unlink|truncate|tee|shred|install|chmod|chown|ln)\\b[^|;&]*\\s/etc/sudoers[^\\s]*|\\b(cp|mv)\\b[^|;&]*\\s/etc/sudoers[^\\s]*\\s*$|\\bsed\\b[^|;&]*\\s-i[^\\s]*\\s[^|;&]*/etc/sudoers[^\\s]*)",
+      "reason": "Editing sudoers incorrectly can lock you out of root entirely.",
+      "examples": [
+        "echo 'x ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/99-x"
+      ]
+    },
+    {
+      "id": "arch.modprobe-write",
+      "severity": "danger",
+      "pattern": "((>|>>)\\s*/etc/modprobe\\.d/[^\\s]*|\\b(rm|rmdir|unlink|truncate|tee|shred|install|chmod|chown|ln)\\b[^|;&]*\\s/etc/modprobe\\.d/[^\\s]*|\\b(cp|mv)\\b[^|;&]*\\s/etc/modprobe\\.d/[^\\s]*\\s*$|\\bsed\\b[^|;&]*\\s-i[^\\s]*\\s[^|;&]*/etc/modprobe\\.d/[^\\s]*)",
+      "reason": "modprobe.d changes only take effect after mkinitcpio; a wrong value can break graphics or hardware support at the next boot.",
+      "examples": [
+        "echo 'blacklist amdgpu' > /etc/modprobe.d/gpu.conf"
+      ]
+    },
+    {
+      "id": "arch.systemd-unit-write",
+      "severity": "danger",
+      "pattern": "((>|>>)\\s*/etc/systemd/system/[^\\s]*|\\b(rm|rmdir|unlink|truncate|tee|shred|install|chmod|chown|ln)\\b[^|;&]*\\s/etc/systemd/system/[^\\s]*|\\b(cp|mv)\\b[^|;&]*\\s/etc/systemd/system/[^\\s]*\\s*$|\\bsed\\b[^|;&]*\\s-i[^\\s]*\\s[^|;&]*/etc/systemd/system/[^\\s]*)",
+      "reason": "System-level unit changes affect boot and services.",
+      "examples": [
+        "rm /etc/systemd/system/foo.service"
+      ]
+    },
+    {
+      "id": "arch.systemctl-mask",
+      "severity": "danger",
+      "pattern": "\\bsystemctl\\b[^|;&]*\\b(mask|isolate)\\b",
+      "reason": "Masking a unit can prevent the system booting into a usable state.",
+      "examples": [
+        "systemctl mask systemd-logind"
+      ]
+    },
+    {
+      "id": "arch.fstab-write",
+      "severity": "danger",
+      "pattern": "((>|>>)\\s*/etc/fstab|\\b(rm|rmdir|unlink|truncate|tee|shred|install|chmod|chown|ln)\\b[^|;&]*\\s/etc/fstab|\\b(cp|mv)\\b[^|;&]*\\s/etc/fstab\\s*$|\\bsed\\b[^|;&]*\\s-i[^\\s]*\\s[^|;&]*/etc/fstab)",
+      "reason": "A bad fstab entry drops the machine to an emergency shell at boot.",
+      "examples": [
+        "genfstab -U /mnt > /etc/fstab"
+      ]
+    }
+  ]
+}

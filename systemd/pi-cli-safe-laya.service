@@ -1,0 +1,27 @@
+[Unit]
+Description=pi-cli-safe layer 1 — resident Laya command scorer
+Documentation=https://github.com/fuzzy-logic/pi-cli-safe
+
+[Service]
+Type=simple
+# Adjust to wherever laya is installed. Anything with `pip install laya` works.
+Environment=PI_CLI_SAFE_PYTHON=/usr/bin/python3
+Environment=PI_CLI_SAFE_DIR=%h/.local/share/pi-cli-safe
+ExecStart=/bin/sh -c '"$PI_CLI_SAFE_PYTHON" "$PI_CLI_SAFE_DIR"/daemon/server.py'
+Restart=always
+RestartSec=5
+
+# CPU by default: ~285 ms per command, and it never contends with a coding
+# model for GPU memory. Add --device cuda above if you would rather have ~35 ms.
+Nice=5
+MemoryMax=4G
+
+# It only ever reads command strings and writes its own state directory.
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=%h/.local/state/pi-cli-safe
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target

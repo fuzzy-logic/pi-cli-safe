@@ -1,0 +1,9 @@
+node_modules/
+dist/
+*.tsbuildinfo
+__pycache__/
+.venv/
+# the learned exemplar store contains real commands — never commit it
+state/
+*.local.json
+data/calibration.json
