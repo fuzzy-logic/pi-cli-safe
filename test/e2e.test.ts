@@ -70,3 +70,14 @@ describe.skipIf(!live)("full stack, live services", () => {
 		expect(out.action).toBe("block");
 	});
 });
+
+describe("reviewer pool, live endpoint", () => {
+	it("first review does not abstain when a reviewer is already serving", async () => {
+		// Regression: the pool used to skip layer 2 on the first call of every
+		// session, which turned into a spurious prompt (or a non-interactive block).
+		const fresh = new ReviewerPool({ ...cfg, llmBackend: "endpoint", llmTimeoutMs: 20000 });
+		const out = await fresh.review({ command: "ls -la", paths: [], cwd: "/tmp", toolName: "bash" });
+		expect(out).not.toBeNull();
+		expect(fresh.chosen?.endpoint).toBeTruthy();
+	});
+});

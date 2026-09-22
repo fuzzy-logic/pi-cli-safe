@@ -55,7 +55,9 @@ export const DEFAULTS: Config = {
 	profiles: ["base"],
 	tools: ["bash", "write", "edit"],
 	layaSocket: join(runtimeDir, "pi-cli-safe-laya.sock"),
-	layaTimeoutMs: 400,
+	// Laya answers in ~400 ms on an idle box and ~600 ms while a large model is
+	// generating on the same GPU. 400 ms silently disabled layer 1 under real load.
+	layaTimeoutMs: 1500,
 	// The session model needs no setup and is always there, so it is the default.
 	llmBackend: "session",
 	sessionReviewBudget: 40,

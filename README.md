@@ -269,3 +269,10 @@ python daemon/calibrate.py            # false-prompt and miss rates
 ```
 
 [fuzzy-logic/pi-cli-safe](https://github.com/fuzzy-logic/pi-cli-safe) · MIT. Built on [Laya](https://github.com/NandhaKishorM/laya) (Apache-2.0).
+
+## Debugging
+
+`PI_CLI_SAFE_DEBUG=1 pi …` traces every guarded tool call to stderr: the
+candidate, which layer decided, each layer's tier and source, and the total
+time. `source: unavailable` on layer 1 means the Laya daemon did not answer
+within `layaTimeoutMs`; on layer 2 it means no reviewer was resolved.

@@ -1,10 +1,10 @@
 /**
  * Session-level reviewer resolution.
  *
- * Discovery is not on the hot path. The first tool call uses whatever is already
- * cached (usually nothing, so layer 2 is skipped once) and kicks discovery off in
- * the background; every later call uses the result. A tool call never waits for
- * a probe.
+ * Discovery is not on the hot path. The first tool call kicks it off and waits
+ * only briefly — a scorecard hit resolves in well under 100 ms — so a session
+ * does not open with a spurious prompt. A slow probe still falls through: no tool
+ * call waits longer than FIRST_CALL_WAIT_MS, and every later call reuses the result.
  */
 
 import * as d from "./discovery.js";
@@ -16,6 +16,8 @@ import { SessionReviewer, type SessionModelHost } from "./layers/l2-session.js";
 
 /** How stale a resolution may get before we re-check what the endpoint is serving. */
 const RECHECK_MS = 10 * 60 * 1000;
+/** Longest the first review waits for discovery before abstaining. */
+const FIRST_CALL_WAIT_MS = 1000;
 
 export class ReviewerPool {
 	private current: d.Reviewer | null = null;
@@ -94,6 +96,9 @@ export class ReviewerPool {
 			return this.host ? this.session.review(this.host, c, this.cfg.llmTimeoutMs) : null;
 		}
 		this.refresh();
+		if (!this.current && this.inFlight) {
+			await Promise.race([this.inFlight, new Promise<void>((res) => setTimeout(res, FIRST_CALL_WAIT_MS).unref?.())]);
+		}
 		const r = this.current;
 		if (!r) return null; // layer 2 abstains; the cascade asks the user instead
 		const out = await reviewCommand(`${r.endpoint}/chat/completions`, r.model, c, this.cfg.llmTimeoutMs);

@@ -18,6 +18,12 @@ import { ReviewerPool } from "./reviewer.js";
 import { makeDecision, record } from "./log.js";
 import type { Candidate } from "./types.js";
 
+/** `PI_CLI_SAFE_DEBUG=1` traces each layer to stderr; off by default. */
+const DEBUG = process.env.PI_CLI_SAFE_DEBUG === "1";
+function dbg(msg: string): void {
+	if (DEBUG) process.stderr.write(`[pi-cli-safe ${new Date().toISOString().slice(11, 23)}] ${msg}\n`);
+}
+
 /** Build a Candidate from whichever tool is being called. */
 function toCandidate(toolName: string, input: Record<string, unknown>, cwd: string): Candidate | null {
 	if (toolName === "bash") {
@@ -40,6 +46,7 @@ export default function (pi: ExtensionAPI) {
 	let pool: ReviewerPool | null = null;
 
 	pi.on("tool_call", async (event, ctx) => {
+		dbg(`tool_call ${event.toolName} hasUI=${String(ctx.hasUI)}`);
 		const cwd = ctx.cwd ?? process.cwd();
 		const cfg = loadConfig(cwd);
 		if (!cfg.enabled || !cfg.tools.includes(event.toolName)) return undefined;
@@ -51,6 +58,7 @@ export default function (pi: ExtensionAPI) {
 		if (!pool) pool = new ReviewerPool(cfg, ctx as never);
 		const reviewers = pool;
 
+		dbg(`candidate ${JSON.stringify(candidate.command).slice(0, 80)} laya=${cfg.layaSocket} backend=${cfg.llmBackend}`);
 		const started = Date.now();
 		const outcome = await runCascade(candidate, cfg, {
 			score: (c) => l1.scoreCommand(cfg.layaSocket, c, cfg.layaTimeoutMs),
@@ -58,11 +66,13 @@ export default function (pi: ExtensionAPI) {
 			reviewerName: () => reviewers.name(),
 		});
 
+		dbg(`cascade done in ${Date.now() - started} ms: action=${outcome.action} tier=${outcome.final.tier} layers=${outcome.layers.map((l) => `${l.layer}:${l.tier}/${l.source ?? ""}`).join(" ")}`);
 		const finish = (allowed: boolean, reason: string) => {
 			record(
 				cfg.logFile,
 				makeDecision(candidate, allowed ? "allow" : "block", outcome.final, outcome.layers, Date.now() - started),
 			);
+			dbg(`finish allowed=${allowed}`);
 			return allowed ? undefined : { block: true, reason };
 		};
 
