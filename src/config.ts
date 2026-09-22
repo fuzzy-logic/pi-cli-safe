@@ -15,6 +15,15 @@ export interface Config {
 	layaSocket: string;
 	layaTimeoutMs: number;
 	/**
+	 * Where layer 2's opinion comes from.
+	 *   "session"  ask the model Pi is already running. Nothing to install.
+	 *   "endpoint" use a dedicated reviewer from llmEndpoints (measured, local, free)
+	 *   "off"      no layer 2; uncertain commands go straight to you
+	 */
+	llmBackend: "session" | "endpoint" | "off";
+	/** Cap on session-model reviews per session, so a paid model cannot run away. */
+	sessionReviewBudget: number;
+	/**
 	 * OpenAI-compatible endpoints for the layer-2 reviewer, in preference order.
 	 * Order is how NPU-before-GPU is expressed: the NPU endpoint goes first.
 	 * Entries may be a bare URL or { url, runtime, label }.
@@ -47,6 +56,9 @@ export const DEFAULTS: Config = {
 	tools: ["bash", "write", "edit"],
 	layaSocket: join(runtimeDir, "pi-cli-safe-laya.sock"),
 	layaTimeoutMs: 400,
+	// The session model needs no setup and is always there, so it is the default.
+	llmBackend: "session",
+	sessionReviewBudget: 40,
 	llmEndpoints: [
 		// An NPU runtime, when one exists, is preferred simply by being first.
 		{ url: "http://127.0.0.1:8130/v1", runtime: "npu", label: "npu" },

@@ -47,14 +47,15 @@ export default function (pi: ExtensionAPI) {
 		const candidate = toCandidate(event.toolName, event.input as Record<string, unknown>, cwd);
 		if (!candidate) return undefined;
 
-		if (!pool) pool = new ReviewerPool(cfg);
+		// ctx carries the session model, which is layer 2's default backend.
+		if (!pool) pool = new ReviewerPool(cfg, ctx as never);
 		const reviewers = pool;
 
 		const started = Date.now();
 		const outcome = await runCascade(candidate, cfg, {
 			score: (c) => l1.scoreCommand(cfg.layaSocket, c, cfg.layaTimeoutMs),
 			review: (c) => reviewers.review(c),
-			reviewerName: () => reviewers.chosen?.model ?? "local reviewer",
+			reviewerName: () => reviewers.name(),
 		});
 
 		const finish = (allowed: boolean, reason: string) => {

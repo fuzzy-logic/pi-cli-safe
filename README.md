@@ -87,6 +87,24 @@ specification, and answers the question it thinks you meant.
 
 ## Choosing the reviewer
 
+**By default there is nothing to choose.** Pi is already connected to a model,
+so when Laya cannot settle a command, layer 2 asks that one. No second server,
+no model download, no GPU memory, no configuration:
+
+```json
+{ "llmBackend": "session", "sessionReviewBudget": 40 }
+```
+
+The budget caps reviews per session, because on a paid cloud model each one
+spends tokens. Past the cap layer 2 abstains and the cascade asks you instead.
+
+Two reasons to run a dedicated reviewer instead (`"llmBackend": "endpoint"`):
+**cost**, if your session model is billed; and **control**, because bigger
+models measured as *more permissive* reviewers, so the session model may be a
+worse judge than a small one chosen for the job.
+
+### Dedicated reviewer (optional)
+
 You name **endpoints**, not models. The plugin works out which of them is
 serving the best reviewer.
 

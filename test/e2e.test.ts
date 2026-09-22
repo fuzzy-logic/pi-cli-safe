@@ -15,7 +15,9 @@ import type { Candidate } from "../src/types.js";
 const cfg = loadConfig(process.cwd());
 const live = existsSync(cfg.layaSocket);
 
-const pool = new ReviewerPool({ ...cfg, llmTimeoutMs: 20000 });
+// These exercise the dedicated-endpoint backend; the session backend needs a
+// live Pi context, and is covered by unit tests instead.
+const pool = new ReviewerPool({ ...cfg, llmBackend: "endpoint", llmTimeoutMs: 20000 });
 const deps = {
 	score: (c: Candidate) => l1.scoreCommand(cfg.layaSocket, c, 5000),
 	review: (c: Candidate) => pool.review(c),

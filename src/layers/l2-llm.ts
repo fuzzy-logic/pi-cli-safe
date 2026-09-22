@@ -10,7 +10,7 @@
 
 import type { Candidate, Verdict } from "../types.js";
 
-const SYSTEM = `You are a command safety reviewer for a coding agent. Your job is to protect the user from destructive shell commands.
+export const SYSTEM_PROMPT = `You are a command safety reviewer for a coding agent. Your job is to protect the user from destructive shell commands.
 
 You will be shown one shell command the agent wants to run. Classify it as dangerous or safe.
 
@@ -62,7 +62,7 @@ export async function reviewCommand(
 				chat_template_kwargs: { enable_thinking: false },
 				reasoning_effort: "none",
 				messages: [
-					{ role: "system", content: SYSTEM },
+					{ role: "system", content: SYSTEM_PROMPT },
 					{
 						role: "user",
 						content: `Working directory: ${c.cwd}\nTool: ${c.toolName}\nCommand:\n${c.command}`,
@@ -78,12 +78,7 @@ export async function reviewCommand(
 		// Fall back to reasoning_content for servers that ignore the flags above
 		// and still emit the verdict inside their thinking.
 		const text = msg?.content?.trim() ? msg.content : (msg?.reasoning_content ?? "");
-		// Last object wins: a model that reasons first still ends with its verdict.
-		const matches = [...text.matchAll(/\{[^{}]*"verdict"[^{}]*\}/g)];
-		if (matches.length === 0) return null;
-		const parsed = JSON.parse(matches[matches.length - 1][0]) as LlmResult;
-		if (parsed.verdict !== "safe" && parsed.verdict !== "dangerous") return null;
-		return { verdict: parsed.verdict, why: String(parsed.why ?? "").slice(0, 300) };
+		return parseVerdict(text);
 	} catch {
 		return null; // Unreachable, slow, or unparseable => the layer abstains.
 	} finally {
@@ -106,4 +101,20 @@ export function toVerdict(r: LlmResult | null, model: string): Verdict {
 		layer: "l2",
 		source: model,
 	};
+}
+
+/**
+ * Pull a verdict out of a model's reply. The last JSON object wins: a model that
+ * reasons before answering still ends with its verdict.
+ */
+export function parseVerdict(text: string): LlmResult | null {
+	const matches = [...text.matchAll(/\{[^{}]*"verdict"[^{}]*\}/g)];
+	if (matches.length === 0) return null;
+	try {
+		const parsed = JSON.parse(matches[matches.length - 1][0]) as LlmResult;
+		if (parsed.verdict !== "safe" && parsed.verdict !== "dangerous") return null;
+		return { verdict: parsed.verdict, why: String(parsed.why ?? "").slice(0, 300) };
+	} catch {
+		return null;
+	}
 }

@@ -12,6 +12,7 @@ import type { Config } from "./config.js";
 import { reviewCommand } from "./layers/l2-llm.js";
 import type { Candidate } from "./types.js";
 import type { LlmResult } from "./layers/l2-llm.js";
+import { SessionReviewer, type SessionModelHost } from "./layers/l2-session.js";
 
 /** How stale a resolution may get before we re-check what the endpoint is serving. */
 const RECHECK_MS = 10 * 60 * 1000;
@@ -21,11 +22,27 @@ export class ReviewerPool {
 	private resolvedAt = 0;
 	private inFlight: Promise<void> | null = null;
 
-	constructor(private cfg: Config) {}
+	private session: SessionReviewer;
+
+	constructor(
+		private cfg: Config,
+		/** Pi's ExtensionContext, when the session-model backend is in use. */
+		private host?: SessionModelHost,
+	) {
+		this.session = new SessionReviewer(cfg.sessionReviewBudget);
+	}
 
 	/** What was chosen, for /safe status. */
 	get chosen(): d.Reviewer | null {
 		return this.current;
+	}
+
+	/** Human-readable name of whatever is actually answering. */
+	name(): string {
+		if (this.cfg.llmBackend === "session") {
+			return this.host ? this.session.name(this.host) : "session model";
+		}
+		return this.current?.model ?? "local reviewer";
 	}
 
 	private stale(): boolean {
@@ -71,6 +88,11 @@ export class ReviewerPool {
 
 	/** Review one command with whichever reviewer is currently resolved. */
 	async review(c: Candidate): Promise<LlmResult | null> {
+		if (this.cfg.llmBackend === "off") return null;
+		if (this.cfg.llmBackend === "session") {
+			// Nothing to discover: Pi already has a model connected.
+			return this.host ? this.session.review(this.host, c, this.cfg.llmTimeoutMs) : null;
+		}
 		this.refresh();
 		const r = this.current;
 		if (!r) return null; // layer 2 abstains; the cascade asks the user instead
