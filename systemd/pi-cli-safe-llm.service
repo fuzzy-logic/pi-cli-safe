@@ -24,7 +24,7 @@ Type=simple
 # thinking and returns empty content, so no verdict ever arrives.
 # --n-gpu-layers 99 keeps it off the CPU.
 Environment=LLAMA_SERVER=/usr/bin/llama-server
-Environment=LLAMA_MODEL=%h/.local/share/models/Qwen3-VL-4B-Instruct-UD-Q4_K_XL.gguf
+Environment=LLAMA_MODEL=%h/.local/share/models/Qwen3-4B-Instruct-2507-UD-Q4_K_XL.gguf
 ExecStart=/bin/sh -c '"$LLAMA_SERVER" -m "$LLAMA_MODEL" --host 127.0.0.1 --port 8127 \
   --ctx-size 8192 --n-gpu-layers 99 --threads 8 --alias reviewer --reasoning off'
 Restart=always
