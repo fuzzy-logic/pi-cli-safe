@@ -24,7 +24,7 @@ export interface Lesson {
 	command: string;
 	cwd: string;
 	label: Label;
-	/** "l2" when the local reviewer decided, "l3" when you did. */
+	/** "l2" when the session model decided, "l3" when you did. */
 	source: string;
 	/** Dangerous lessons apply at once; safe ones wait for review. */
 	applied: boolean;

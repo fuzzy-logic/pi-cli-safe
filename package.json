@@ -1,7 +1,7 @@
 {
   "name": "pi-cli-safe",
   "version": "0.1.0",
-  "description": "A fuzzy-logic safety cascade for the Pi coding agent: deterministic rules, a local decision model, a local LLM reviewer, then you.",
+  "description": "A fuzzy-logic safety cascade for the Pi coding agent: deterministic rules, a local decision model, the model Pi is already running, then you.",
   "keywords": [
     "pi",
     "pi-extension",

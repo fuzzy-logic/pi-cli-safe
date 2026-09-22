@@ -3,7 +3,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { EndpointSpec } from "./discovery.js";
 
 export interface Config {
 	enabled: boolean;
@@ -17,28 +16,11 @@ export interface Config {
 	/**
 	 * Where layer 2's opinion comes from.
 	 *   "session"  ask the model Pi is already running. Nothing to install.
-	 *   "endpoint" use a dedicated reviewer from llmEndpoints (measured, local, free)
 	 *   "off"      no layer 2; uncertain commands go straight to you
 	 */
-	llmBackend: "session" | "endpoint" | "off";
+	llmBackend: "session" | "off";
 	/** Cap on session-model reviews per session, so a paid model cannot run away. */
 	sessionReviewBudget: number;
-	/**
-	 * OpenAI-compatible endpoints for the layer-2 reviewer, in preference order.
-	 * Order is how NPU-before-GPU is expressed: the NPU endpoint goes first.
-	 * Entries may be a bare URL or { url, runtime, label }.
-	 */
-	llmEndpoints: (string | EndpointSpec)[];
-	/**
-	 * "best"   rank by measured false-safe rate and pick the winner
-	 * "first"  take the first healthy endpoint, honouring your ordering
-	 * "pinned" skip discovery and use llmEndpoints[0] with llmModel
-	 */
-	llmSelection: "best" | "first" | "pinned";
-	/** Only used with "pinned". */
-	llmModel: string | null;
-	/** The reviewer should not run on CPU; set true to allow it anyway. */
-	allowCpuReviewer: boolean;
 	llmTimeoutMs: number;
 	/** What to do when there is no UI to ask (pi -p). Layer 3 cannot run. */
 	nonInteractive: "block" | "allow";
@@ -61,14 +43,6 @@ export const DEFAULTS: Config = {
 	// The session model needs no setup and is always there, so it is the default.
 	llmBackend: "session",
 	sessionReviewBudget: 40,
-	llmEndpoints: [
-		// An NPU runtime, when one exists, is preferred simply by being first.
-		{ url: "http://127.0.0.1:8130/v1", runtime: "npu", label: "npu" },
-		{ url: "http://127.0.0.1:8127/v1", runtime: "gpu", label: "dedicated reviewer" },
-	],
-	llmSelection: "best",
-	llmModel: null,
-	allowCpuReviewer: false,
 	llmTimeoutMs: 4000,
 	nonInteractive: "block",
 	logFile: join(stateDir, "decisions.jsonl"),
@@ -94,15 +68,17 @@ export function loadConfig(cwd: string): Config {
 }
 
 /**
- * Accept the pre-discovery config shape. `llmEndpoint` + `llmModel` used to name
- * one server; that now means "pin this one".
+ * Accept config written for earlier versions. Layer 2 used to be able to run
+ * against a dedicated llama-server ("endpoint", with llmEndpoints, llmSelection,
+ * llmModel, allowCpuReviewer). That backend is gone: any such config now means
+ * the session model, and the stale keys are dropped so they cannot confuse anyone
+ * reading `/safe status`. Anything but "off" is "session".
  */
-function migrate(cfg: Config & { llmEndpoint?: string }): Config {
-	if (cfg.llmEndpoint) {
-		const url = cfg.llmEndpoint.replace(/\/chat\/completions$/, "");
-		cfg.llmEndpoints = [{ url }];
-		if (cfg.llmModel) cfg.llmSelection = "pinned";
-		delete cfg.llmEndpoint;
+function migrate(cfg: Config): Config {
+	const loose = cfg as unknown as Record<string, unknown>;
+	if (loose.llmBackend !== "off") loose.llmBackend = "session";
+	for (const stale of ["llmEndpoint", "llmEndpoints", "llmSelection", "llmModel", "allowCpuReviewer"]) {
+		delete loose[stale];
 	}
 	return cfg;
 }

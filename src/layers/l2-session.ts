@@ -1,24 +1,22 @@
 /**
- * Layer 2, session-model backend.
+ * Layer 2 — ask the model Pi is already running.
  *
- * Pi is already connected to a model. When Laya cannot settle a command, ask
- * that one. No second server, no separate model download, no GPU memory, no
- * discovery — and it is always available, because if Pi is running then a model
- * is connected.
+ * When Laya cannot settle a command, the session model gets one short turn with
+ * the safety prompt. No second server, no separate model download, no extra GPU
+ * memory — and it is always available, because if Pi is running then a model is
+ * connected.
  *
  * Two things this trades away, stated plainly:
  *
  *  1. Cost. On a paid cloud model every uncertain command spends tokens. The
- *     per-session call budget below bounds that; it is not free the way a local
- *     reviewer is.
- *  2. Control. Benchmarking showed larger models are *more* permissive as
- *     safety reviewers — a 22G MoE waved through `rm -rf ~/Documents/archive`
- *     that a 2.4G model caught. Using whatever the session happens to run gives
- *     up the ability to pick a model measured to be careful. The endpoint
- *     backend exists for when that control matters more than the simplicity.
+ *     per-session call budget below bounds that.
+ *  2. Control. When this was benchmarked, larger models were *more* permissive
+ *     as safety reviewers than small ones. Layer 2 is only as careful as the
+ *     model you are coding with. It can only clear commands Laya was unsure
+ *     about; it can never override a layer-0 rule or your own answer.
  */
 
-import { SYSTEM_PROMPT, parseVerdict } from "./l2-llm.js";
+import { SYSTEM_PROMPT, parseVerdict, userPrompt } from "./l2-llm.js";
 import type { LlmResult } from "./l2-llm.js";
 import type { Candidate } from "../types.js";
 
@@ -61,7 +59,7 @@ export class SessionReviewer {
 						messages: [
 							{
 								role: "user",
-								content: [{ type: "text", text: `Working directory: ${c.cwd}\nTool: ${c.toolName}\nCommand:\n${c.command}` }],
+								content: [{ type: "text", text: userPrompt(c) }],
 							},
 						],
 					},

@@ -6,9 +6,10 @@ Most command guards are a single boolean: a command either trips a regex or it
 runs unexamined. This one runs four layers, cheapest first, and only interrupts
 you when nothing cheaper could decide.
 
-Every layer runs **locally and free**, which is the property that makes it work.
-There is no budget pressure to leave commands unexamined, so every command gets
-looked at — not just the ones a pattern happened to catch.
+Layers 0 and 1 run **locally and free**, which is the property that makes it
+work: there is no budget pressure to leave commands unexamined, so every command
+gets looked at — not just the ones a pattern happened to catch. Layer 2 only
+sees the commands those two could not settle.
 
 ```
 bash · write · edit
@@ -22,7 +23,7 @@ bash · write · edit
      ├─ clearly dangerous → ask you
      └─ uncertain         → L2
    │
- L2  local LLM reviewer                              ~1–3 s   local · free
+ L2  the model Pi is already running                 ~1–3 s
      ├─ safe      → allow
      └─ dangerous → ask you
    │
@@ -37,7 +38,7 @@ genuinely destructive ones — using layers 0 and 1 only:
 | | |
 |---|---|
 | Safe commands allowed silently | **85.6%** |
-| Safe commands sent to L2 (no prompt, ~1–3 s) | 14.4% |
+| Safe commands sent to L2, the session model (no prompt, ~1–3 s) | 14.4% |
 | **Safe commands that falsely interrupt you** | **0.0%** |
 | Dangerous commands that reach you | **100%** |
 | Dangerous caught at L0, before any model | 87.1% |
@@ -85,11 +86,12 @@ not the question strings. Putting your definition of "dangerous" into an
 instruction does not work; the model treats it as a topic cue rather than a
 specification, and answers the question it thinks you meant.
 
-## Choosing the reviewer
+## Layer 2 is the model you are already using
 
-**By default there is nothing to choose.** Pi is already connected to a model,
-so when Laya cannot settle a command, layer 2 asks that one. No second server,
-no model download, no GPU memory, no configuration:
+There is nothing to run and nothing to choose. Pi is connected to a model, so
+when Laya cannot settle a command, layer 2 asks that one — through Pi's own
+model registry, with a short fixed safety prompt and reasoning turned off.
+No second server, no model download, no extra GPU memory.
 
 ```json
 { "llmBackend": "session", "sessionReviewBudget": 40 }
@@ -97,70 +99,19 @@ no model download, no GPU memory, no configuration:
 
 The budget caps reviews per session, because on a paid cloud model each one
 spends tokens. Past the cap layer 2 abstains and the cascade asks you instead.
+`"llmBackend": "off"` skips the layer entirely.
 
-Two reasons to run a dedicated reviewer instead (`"llmBackend": "endpoint"`):
-**cost**, if your session model is billed; and **control**, because bigger
-models measured as *more permissive* reviewers, so the session model may be a
-worse judge than a small one chosen for the job.
+Two things this trades away, stated plainly. **Cost**, if your session model is
+billed. **Judgement**: when this was measured, larger models were *more*
+permissive safety reviewers than small ones, so layer 2 is only as careful as
+the model you are coding with. The design limits what that can cost you: layer
+2 can only clear a command Laya was genuinely unsure about. It cannot soften a
+layer-0 rule, and it never gets the last word on anything Laya or a rule called
+dangerous — that goes to you.
 
-### Dedicated reviewer (optional)
-
-You name **endpoints**, not models. The plugin works out which of them is
-serving the best reviewer.
-
-```json
-{
-  "llmEndpoints": [
-    { "url": "http://127.0.0.1:8130/v1", "runtime": "npu" },
-    { "url": "http://127.0.0.1:8127/v1", "runtime": "gpu" }
-  ],
-  "llmSelection": "best",
-  "allowCpuReviewer": false
-}
-```
-
-Order is preference, which is how NPU-before-GPU is expressed. `"best"` ranks by
-measured false-safe rate; `"first"` takes the first healthy endpoint; `"pinned"`
-skips discovery. An endpoint declared `cpu` is skipped unless you allow it, and
-one that answers implausibly slowly is treated as CPU-bound and rejected.
-
-Known models are scored from `data/reviewer-scorecard.json`. Unknown ones are
-probed with 12 commands, and the result is cached for a week keyed by endpoint
-plus GGUF path, so swapping the model behind a port re-probes automatically.
-
-**Ranking is by false-safe rate, never by size**, because size is actively
-misleading here:
-
-| model | size | runtime | accuracy | false-safe | false alarms | median |
-|---|---|---|---|---|---|---|
-| **Qwen3-4B-Instruct-2507** | 2.4G | GPU | **97.5%** | **0/20** | 1/20 | **556 ms** |
-| Qwen3-VL-4B | 3.2G | GPU | 95.0% | **0/20** | 2/20 | 499 ms |
-| Ornith-1.5-9B | 7.1G | GPU | 95.0% | **0/20** | 2/20 | 1596 ms |
-| GLM-4.7-Flash | 25G | GPU | 97.5% | 1/20 | 0/20 | 1114 ms |
-| Qwen3.6-35B-A3B | 22G | GPU | 92.5% | **3/20** | 0/20 | 1123 ms |
-| Qwen3.5-2B | 1.2G | GPU | 67.5% | 1/20 | 12/20 | 447 ms |
-| Qwen3-4B-Instruct-2507 | 3.1G | **NPU** | 92.5% | 1/20 | 2/20 | 2555 ms |
-| Qwen3.5-4B | 3.4G | **NPU** | 90.0% | 2/20 | 2/20 | 3198 ms |
-
-The two largest models were the most permissive: the 22G MoE waved through
-`rm -rf ~/Documents/archive` and `sudo mkinitcpio -P`. A 2.4G model beat a 25G
-one, and dropping a vision tower the job never uses (VL-4B to Instruct-4B)
-*improved* accuracy rather than costing it.
-
-The NPU rows are real and work — FastFlowLM on XDNA2. The same model was run on
-both: **97.5% / 0 false-safe / 556 ms on the iGPU, 92.5% / 1 false-safe /
-2555 ms on the NPU.** Identical weights, so the accuracy gap is the NPU
-quantisation, and it is ~4.5x slower. It is still the right choice
-when you want the GPU left entirely free for a coding model, which is why
-endpoint order rather than a hard rule decides it. A reviewer that fails
-either of those during probing is **rejected outright rather than ranked** — no
-layer 2 is better than a permissive one, because the cascade then asks you.
-
-Reasoning is disabled for the reviewer. A model that thinks first spends its
-whole budget on `reasoning_content` and returns empty `content`, so no verdict
-ever arrives; the client sends `enable_thinking: false` and `reasoning_effort:
-none`, and falls back to reading the verdict out of `reasoning_content` for
-servers that ignore both.
+A model that thinks first spends its whole token budget on reasoning and
+returns no verdict, so the request asks for reasoning off and takes the last
+JSON object in the reply either way.
 
 ## Install
 
@@ -171,29 +122,21 @@ pi install pi-cli-safe
 pi install @giuseppe.trisciuoglio/pi-prevent-destructive-commands   # layer 0
 ```
 
-That gives you L0 → L3. Every other layer is optional and each degrades
-independently: a dead daemon skips its layer, it never blocks your agent.
+That gives you L0, L2 and L3: layer 2 needs nothing beyond the model Pi is
+already talking to. Layer 1 is optional and degrades independently: a dead
+daemon skips its layer, it never blocks your agent.
 
-To add layer 1 (Laya) and layer 2 (the local reviewer):
+To add layer 1 (Laya):
 
 ```bash
 pip install laya                       # ~1.7 GB checkpoint on first run
-cp systemd/*.service ~/.config/systemd/user/
+cp systemd/pi-cli-safe-laya.service ~/.config/systemd/user/
 systemctl --user edit pi-cli-safe-laya   # set PI_CLI_SAFE_PYTHON and PI_CLI_SAFE_DIR
-systemctl --user edit pi-cli-safe-llm    # set LLAMA_SERVER and LLAMA_MODEL
-systemctl --user enable --now pi-cli-safe-laya pi-cli-safe-llm
+systemctl --user enable --now pi-cli-safe-laya
 ```
 
-Use `systemctl --user edit` for the paths rather than editing the units in
+Use `systemctl --user edit` for the paths rather than editing the unit in
 place, so an update to this repo does not clobber your local values.
-
-**If your reviewer is a reasoning model**, thinking is disabled for it. A model
-that reasons first spends its whole token budget on `reasoning_content` and
-returns empty `content` — the verdict never arrives. The client sends
-`enable_thinking: false` and `reasoning_effort: none`, and falls back to reading
-the verdict out of `reasoning_content` for servers that ignore both. The shipped
-llama.cpp unit also sets it server-side. Qwen3.5-2B went from *no answer at all*
-to a correct verdict in ~550 ms.
 
 ## Profiles
 
@@ -221,7 +164,7 @@ bootable laptop.
 
 Laya's weights are frozen and nothing here retrains them. What happens instead:
 
-1. **Exemplars, immediate.** Every command you or the reviewer calls dangerous
+1. **Exemplars, immediate.** Every command you or the session model calls dangerous
    is stored and embedded using the encoder that is *already loaded*
    (`laya.embed_fn_from_agent` — no second model, no extra memory). New commands
    are compared against them and something merely *similar* to what you flagged
@@ -274,7 +217,7 @@ raises the floor. It does not build a wall.
 ## Development
 
 ```bash
-npm test                              # 60 tests: rules, cascade, raise-only invariant
+npm test                              # rules, cascade, session reviewer, raise-only invariant
 npm run typecheck
 python daemon/server.py --selftest    # scores a fixed set against the real model
 python daemon/calibrate.py            # false-prompt and miss rates
@@ -287,4 +230,5 @@ python daemon/calibrate.py            # false-prompt and miss rates
 `PI_CLI_SAFE_DEBUG=1 pi …` traces every guarded tool call to stderr: the
 candidate, which layer decided, each layer's tier and source, and the total
 time. `source: unavailable` on layer 1 means the Laya daemon did not answer
-within `layaTimeoutMs`; on layer 2 it means no reviewer was resolved.
+within `layaTimeoutMs`; on layer 2 it means the session model gave no verdict
+within `llmTimeoutMs`, the session budget is spent, or no model is connected.

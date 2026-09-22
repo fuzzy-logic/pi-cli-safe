@@ -14,7 +14,7 @@ import { loadConfig } from "./config.js";
 import * as l1 from "./layers/l1-laya.js";
 import * as l3 from "./layers/l3-user.js";
 import { teach } from "./learn.js";
-import { ReviewerPool } from "./reviewer.js";
+import { SessionReviewer, type SessionModelHost } from "./layers/l2-session.js";
 import { makeDecision, record } from "./log.js";
 import type { Candidate } from "./types.js";
 
@@ -42,8 +42,8 @@ function toCandidate(toolName: string, input: Record<string, unknown>, cwd: stri
 }
 
 export default function (pi: ExtensionAPI) {
-	// One pool per session: discovery runs in the background and is reused.
-	let pool: ReviewerPool | null = null;
+	// One reviewer per session, so the review budget is counted per session.
+	let reviewer: SessionReviewer | null = null;
 
 	pi.on("tool_call", async (event, ctx) => {
 		dbg(`tool_call ${event.toolName} hasUI=${String(ctx.hasUI)}`);
@@ -54,16 +54,17 @@ export default function (pi: ExtensionAPI) {
 		const candidate = toCandidate(event.toolName, event.input as Record<string, unknown>, cwd);
 		if (!candidate) return undefined;
 
-		// ctx carries the session model, which is layer 2's default backend.
-		if (!pool) pool = new ReviewerPool(cfg, ctx as never);
-		const reviewers = pool;
+		// ctx carries the model Pi is running, which is what layer 2 asks.
+		if (!reviewer) reviewer = new SessionReviewer(cfg.sessionReviewBudget);
+		const host = ctx as unknown as SessionModelHost;
+		const l2 = reviewer;
 
 		dbg(`candidate ${JSON.stringify(candidate.command).slice(0, 80)} laya=${cfg.layaSocket} backend=${cfg.llmBackend}`);
 		const started = Date.now();
 		const outcome = await runCascade(candidate, cfg, {
 			score: (c) => l1.scoreCommand(cfg.layaSocket, c, cfg.layaTimeoutMs),
-			review: (c) => reviewers.review(c),
-			reviewerName: () => reviewers.name(),
+			review: (c) => (cfg.llmBackend === "off" ? Promise.resolve(null) : l2.review(host, c, cfg.llmTimeoutMs)),
+			reviewerName: () => l2.name(host),
 		});
 
 		dbg(`cascade done in ${Date.now() - started} ms: action=${outcome.action} tier=${outcome.final.tier} layers=${outcome.layers.map((l) => `${l.layer}:${l.tier}/${l.source ?? ""}`).join(" ")}`);

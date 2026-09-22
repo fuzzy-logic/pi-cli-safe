@@ -1,11 +1,10 @@
 /**
- * Layer 2 — local LLM reviewer.
+ * Layer 2 — the LLM verdict.
  *
- * Only sees commands layer 1 could not settle. Runs against an
- * OpenAI-compatible endpoint on localhost, so it is free and nothing leaves the
- * machine. Default target is a small model (Qwen3.5-2B) on its own port: this
- * judgement is narrow and does not need a large model, and a small one will not
- * compete with a big coding model for GPU memory.
+ * Only sees commands layer 1 could not settle. The model asked is the one Pi is
+ * already running (see l2-session.ts); this file holds what is independent of
+ * where the model lives: the prompt, the verdict parser, and the mapping from a
+ * verdict to a cascade tier.
  */
 
 import type { Candidate, Verdict } from "../types.js";
@@ -32,65 +31,21 @@ When genuinely unsure, answer dangerous. A needless prompt costs the user a seco
 Reply with JSON only, no other text:
 {"verdict":"dangerous"|"safe","why":"<one short sentence>"}`;
 
+/** The user turn: working directory and tool are policy context the prompt asks for. */
+export function userPrompt(c: Candidate): string {
+	return `Working directory: ${c.cwd}\nTool: ${c.toolName}\nCommand:\n${c.command}`;
+}
+
 export interface LlmResult {
 	verdict: "safe" | "dangerous";
 	why: string;
-}
-
-export async function reviewCommand(
-	endpoint: string,
-	model: string,
-	c: Candidate,
-	timeoutMs: number,
-): Promise<LlmResult | null> {
-	const ctrl = new AbortController();
-	const timer = setTimeout(() => ctrl.abort(), timeoutMs);
-	try {
-		const res = await fetch(endpoint, {
-			method: "POST",
-			headers: { "content-type": "application/json" },
-			signal: ctrl.signal,
-			body: JSON.stringify({
-				model,
-				temperature: 0,
-				max_tokens: 160,
-				// Reasoning models spend the whole budget thinking and return an
-				// empty `content`. A binary safety verdict does not need a chain
-				// of thought, and the latency matters here: disabling it took
-				// Qwen3.5-2B from "no answer at all" to a correct verdict in
-				// ~550 ms. Both spellings are ignored by servers that lack them.
-				chat_template_kwargs: { enable_thinking: false },
-				reasoning_effort: "none",
-				messages: [
-					{ role: "system", content: SYSTEM_PROMPT },
-					{
-						role: "user",
-						content: `Working directory: ${c.cwd}\nTool: ${c.toolName}\nCommand:\n${c.command}`,
-					},
-				],
-			}),
-		});
-		if (!res.ok) return null;
-		const body = (await res.json()) as {
-			choices?: { message?: { content?: string; reasoning_content?: string } }[];
-		};
-		const msg = body.choices?.[0]?.message;
-		// Fall back to reasoning_content for servers that ignore the flags above
-		// and still emit the verdict inside their thinking.
-		const text = msg?.content?.trim() ? msg.content : (msg?.reasoning_content ?? "");
-		return parseVerdict(text);
-	} catch {
-		return null; // Unreachable, slow, or unparseable => the layer abstains.
-	} finally {
-		clearTimeout(timer);
-	}
 }
 
 export function toVerdict(r: LlmResult | null, model: string): Verdict {
 	if (!r) {
 		return {
 			tier: "review",
-			reason: "Local reviewer unavailable — deferring to you.",
+			reason: "No model verdict — deferring to you.",
 			layer: "l2",
 			source: "unavailable",
 		};

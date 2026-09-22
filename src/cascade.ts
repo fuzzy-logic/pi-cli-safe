@@ -15,7 +15,7 @@ import { escalate, tierRank } from "./types.js";
 export interface CascadeDeps {
 	score: (c: Candidate) => Promise<l1.LayaResponse | null>;
 	review: (c: Candidate) => Promise<l2.LlmResult | null>;
-	/** Name of the resolved reviewer, for the verdict trail. */
+	/** Name of the model answering layer 2, for the verdict trail. */
 	reviewerName?: () => string;
 }
 
@@ -64,8 +64,8 @@ export async function runCascade(c: Candidate, cfg: Config, deps: CascadeDeps): 
 	}
 	floor = afterLaya; // "review" — genuinely uncertain, worth the slower layer
 
-	// ---- Layer 2: local LLM reviewer --------------------------------------
-	const llm = l2.toVerdict(await deps.review(c), deps.reviewerName?.() ?? "local reviewer");
+	// ---- Layer 2: the session model ----------------------------------------
+	const llm = l2.toVerdict(await deps.review(c), deps.reviewerName?.() ?? "session model");
 	layers.push(llm);
 
 	if (llm.tier === "allow" && tierRank(floor) <= tierRank("review")) {

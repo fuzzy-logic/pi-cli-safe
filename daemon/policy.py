@@ -13,7 +13,7 @@ a reason. No weights to tune, nothing to reverse-engineer when it surprises you.
 
 Tiers:
   allow   - let it run
-  review  - genuinely uncertain; layer 2 (local LLM) resolves it
+  review  - genuinely uncertain; layer 2 (the session model) resolves it
   danger  - ask the user
 """
 

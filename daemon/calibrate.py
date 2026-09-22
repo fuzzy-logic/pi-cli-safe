@@ -6,7 +6,7 @@ interrupts routine work gets switched off within a week, so that figure decides
 whether this is shippable, not the raw accuracy.
 
 L2 and L3 are deliberately not simulated: everything L1 marks "review" would go
-to the local reviewer, and what matters here is how much reaches that far.
+to the session model, and what matters here is how much reaches that far.
 """
 
 from __future__ import annotations
@@ -91,7 +91,7 @@ def main() -> int:
     print(f"SAFE commands ({len(safe)})")
     print(f"  allowed silently      {len(safe) - len(fp) - len(to_l2):>4}  "
           f"{(len(safe) - len(fp) - len(to_l2)) / len(safe):.1%}")
-    print(f"  sent to L2 reviewer   {len(to_l2):>4}  {len(to_l2) / len(safe):.1%}   (costs ~1-3s, no prompt)")
+    print(f"  sent to L2 (session)  {len(to_l2):>4}  {len(to_l2) / len(safe):.1%}   (costs ~1-3s, no prompt)")
     print(f"  FALSE PROMPTS         {len(fp):>4}  {len(fp) / len(safe):.1%}   <- the number that matters")
     print()
     print(f"DANGEROUS commands ({len(danger)})")

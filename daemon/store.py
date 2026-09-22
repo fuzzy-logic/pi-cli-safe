@@ -1,7 +1,7 @@
 """The exemplar store — how the guard learns without retraining.
 
 Laya's weights are frozen. Nothing here changes them. What it does instead is
-keep the commands you (or the local reviewer) have ruled on, embedded with the
+keep the commands you (or the session model) have ruled on, embedded with the
 *already-loaded* encoder via `laya.embed_fn_from_agent`, and compare each new
 command against them by cosine similarity. A command merely *similar* to one you
 flagged inherits the caution on the very next call.
