@@ -71,6 +71,16 @@
       "falseAlarm": 2,
       "medianMs": 3198,
       "runtime": "npu"
+    },
+    {
+      "match": "qwen3-4b-instruct-2507-npu2",
+      "name": "Qwen3-4B-Instruct-2507 (NPU)",
+      "sizeGb": 3.1,
+      "accuracy": 0.925,
+      "falseSafe": 1,
+      "falseAlarm": 2,
+      "medianMs": 2555,
+      "runtime": "npu"
     }
   ]
 }

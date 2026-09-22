@@ -121,6 +121,7 @@ misleading here:
 | GLM-4.7-Flash | 25G | GPU | 97.5% | 1/20 | 0/20 | 1114 ms |
 | Qwen3.6-35B-A3B | 22G | GPU | 92.5% | **3/20** | 0/20 | 1123 ms |
 | Qwen3.5-2B | 1.2G | GPU | 67.5% | 1/20 | 12/20 | 447 ms |
+| Qwen3-4B-Instruct-2507 | 3.1G | **NPU** | 92.5% | 1/20 | 2/20 | 2555 ms |
 | Qwen3.5-4B | 3.4G | **NPU** | 90.0% | 2/20 | 2/20 | 3198 ms |
 
 The two largest models were the most permissive: the 22G MoE waved through
@@ -128,8 +129,10 @@ The two largest models were the most permissive: the 22G MoE waved through
 one, and dropping a vision tower the job never uses (VL-4B to Instruct-4B)
 *improved* accuracy rather than costing it.
 
-The NPU row is real and works — FastFlowLM on XDNA2 — but is roughly six times
-slower than the same class of model on the iGPU. It is still the right choice
+The NPU rows are real and work — FastFlowLM on XDNA2. The same model was run on
+both: **97.5% / 0 false-safe / 556 ms on the iGPU, 92.5% / 1 false-safe /
+2555 ms on the NPU.** Identical weights, so the accuracy gap is the NPU
+quantisation, and it is ~4.5x slower. It is still the right choice
 when you want the GPU left entirely free for a coding model, which is why
 endpoint order rather than a hard rule decides it. A reviewer that fails
 either of those during probing is **rejected outright rather than ranked** — no
