@@ -22,13 +22,14 @@
     "url": "https://github.com/fuzzy-logic/pi-cli-safe/issues"
   },
   "type": "module",
-  "main": "src/index.ts",
+  "main": "index.ts",
   "exports": {
-    ".": "./src/index.ts",
+    ".": "./index.ts",
     "./cascade": "./src/cascade.ts",
     "./types": "./src/types.ts"
   },
   "files": [
+    "index.ts",
     "src",
     "profiles",
     "daemon",

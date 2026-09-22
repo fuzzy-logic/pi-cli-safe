@@ -102,9 +102,21 @@ To add layer 1 (Laya) and layer 2 (the local reviewer):
 ```bash
 pip install laya                       # ~1.7 GB checkpoint on first run
 cp systemd/*.service ~/.config/systemd/user/
-# edit the two Environment= lines to match your paths
+systemctl --user edit pi-cli-safe-laya   # set PI_CLI_SAFE_PYTHON and PI_CLI_SAFE_DIR
+systemctl --user edit pi-cli-safe-llm    # set LLAMA_SERVER and LLAMA_MODEL
 systemctl --user enable --now pi-cli-safe-laya pi-cli-safe-llm
 ```
+
+Use `systemctl --user edit` for the paths rather than editing the units in
+place, so an update to this repo does not clobber your local values.
+
+**If your reviewer is a reasoning model**, thinking is disabled for it. A model
+that reasons first spends its whole token budget on `reasoning_content` and
+returns empty `content` — the verdict never arrives. The client sends
+`enable_thinking: false` and `reasoning_effort: none`, and falls back to reading
+the verdict out of `reasoning_content` for servers that ignore both. The shipped
+llama.cpp unit also sets it server-side. Qwen3.5-2B went from *no answer at all*
+to a correct verdict in ~550 ms.
 
 ## Profiles
 

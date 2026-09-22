@@ -38,7 +38,14 @@ export async function reviewCommand(
 			body: JSON.stringify({
 				model,
 				temperature: 0,
-				max_tokens: 120,
+				max_tokens: 160,
+				// Reasoning models spend the whole budget thinking and return an
+				// empty `content`. A binary safety verdict does not need a chain
+				// of thought, and the latency matters here: disabling it took
+				// Qwen3.5-2B from "no answer at all" to a correct verdict in
+				// ~550 ms. Both spellings are ignored by servers that lack them.
+				chat_template_kwargs: { enable_thinking: false },
+				reasoning_effort: "none",
 				messages: [
 					{ role: "system", content: SYSTEM },
 					{
@@ -49,11 +56,17 @@ export async function reviewCommand(
 			}),
 		});
 		if (!res.ok) return null;
-		const body = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-		const text = body.choices?.[0]?.message?.content ?? "";
-		const match = text.match(/\{[\s\S]*\}/);
-		if (!match) return null;
-		const parsed = JSON.parse(match[0]) as LlmResult;
+		const body = (await res.json()) as {
+			choices?: { message?: { content?: string; reasoning_content?: string } }[];
+		};
+		const msg = body.choices?.[0]?.message;
+		// Fall back to reasoning_content for servers that ignore the flags above
+		// and still emit the verdict inside their thinking.
+		const text = msg?.content?.trim() ? msg.content : (msg?.reasoning_content ?? "");
+		// Last object wins: a model that reasons first still ends with its verdict.
+		const matches = [...text.matchAll(/\{[^{}]*"verdict"[^{}]*\}/g)];
+		if (matches.length === 0) return null;
+		const parsed = JSON.parse(matches[matches.length - 1][0]) as LlmResult;
 		if (parsed.verdict !== "safe" && parsed.verdict !== "dangerous") return null;
 		return { verdict: parsed.verdict, why: String(parsed.why ?? "").slice(0, 300) };
 	} catch {

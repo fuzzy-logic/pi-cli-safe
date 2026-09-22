@@ -20,7 +20,12 @@ MemoryMax=4G
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=read-only
-ReadWritePaths=%h/.local/state/pi-cli-safe
+# StateDirectory, not ReadWritePaths: systemd creates this for us. ReadWritePaths
+# requires the path to already exist, so a fresh install fails with 226/NAMESPACE.
+StateDirectory=pi-cli-safe
+# %t is the per-user runtime dir (/run/user/UID), where the socket is bound.
+# ProtectSystem=strict makes it read-only otherwise.
+ReadWritePaths=%t
 NoNewPrivileges=true
 
 [Install]

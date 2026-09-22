@@ -8,9 +8,13 @@ Type=simple
 # A small model is the right choice here: the judgement is narrow, and a small
 # model leaves your GPU free for the model you are actually coding with.
 Environment=LLAMA_SERVER=/usr/bin/llama-server
+# Reasoning models otherwise spend the whole token budget thinking and return
+# empty content. A binary safety verdict does not need a chain of thought.
+Environment="LLAMA_ARG_CHAT_TEMPLATE_KWARGS={\"enable_thinking\":false}"
 Environment=LLAMA_MODEL=%h/.local/share/models/Qwen3.5-2B-Q4_K_M.gguf
 ExecStart=/bin/sh -c '"$LLAMA_SERVER" -m "$LLAMA_MODEL" --host 127.0.0.1 --port 8127 \
-  --ctx-size 4096 --n-gpu-layers 0 --threads 8 --alias qwen3.5-2b'
+  --ctx-size 16384 --n-gpu-layers 0 --threads 8 --alias qwen3.5-2b \
+  --reasoning-budget 0'
 Restart=always
 RestartSec=5
 Nice=10
